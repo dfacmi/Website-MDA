@@ -37,6 +37,106 @@
       },
       "required": ["slotId", "dataUrl", "isPublic", "updatedBy", "updatedAt"]
     },
+    "PpdbRegistration": {
+      "title": "PpdbRegistration",
+      "description": "Online PPDB registration and initial consultation request submitted by prospective students or parents.",
+      "type": "object",
+      "properties": {
+        "registrationId": {
+          "type": "string",
+          "description": "Registration reference matching the document ID.",
+          "minLength": 4,
+          "maxLength": 64,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "studentName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 120
+        },
+        "schoolOrigin": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 150
+        },
+        "parentName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 120
+        },
+        "whatsapp": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 30
+        },
+        "programInterest": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "notes": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 1000
+        },
+        "status": {
+          "type": "string",
+          "enum": ["baru", "diproses", "selesai"],
+          "maxLength": 16
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp recorded via request.time."
+        }
+      },
+      "required": [
+        "registrationId",
+        "studentName",
+        "schoolOrigin",
+        "parentName",
+        "whatsapp",
+        "programInterest",
+        "notes",
+        "status",
+        "createdAt"
+      ]
+    },
+    "ContactMessage": {
+      "title": "ContactMessage",
+      "description": "Public inquiry message submitted via the MDA Contact page.",
+      "type": "object",
+      "properties": {
+        "messageId": {
+          "type": "string",
+          "minLength": 4,
+          "maxLength": 64,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 120
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "minLength": 5,
+          "maxLength": 254
+        },
+        "message": {
+          "type": "string",
+          "minLength": 5,
+          "maxLength": 2000
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp recorded via request.time."
+        }
+      },
+      "required": ["messageId", "name", "email", "message", "createdAt"]
+    },
     "AdminRecord": {
       "title": "AdminRecord",
       "description": "Trusted administrator directory record managed out-of-band.",
@@ -60,6 +160,14 @@
     "/site_photos/{slotId}": {
       "schema": { "$ref": "#/entities/SitePhoto" },
       "description": "Publicly readable website photos writable strictly by verified MDA administrators."
+    },
+    "/ppdb_registrations/{registrationId}": {
+      "schema": { "$ref": "#/entities/PpdbRegistration" },
+      "description": "Write-once public PPDB registrations readable and manageable strictly by verified MDA administrators."
+    },
+    "/contact_messages/{messageId}": {
+      "schema": { "$ref": "#/entities/ContactMessage" },
+      "description": "Write-once public contact inquiries readable strictly by verified MDA administrators."
     },
     "/admins/{adminUid}": {
       "schema": { "$ref": "#/entities/AdminRecord" },

@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { CheckCircle2, ExternalLink, Mail, MapPin, MessageCircle, Send } from 'lucide-react';
 import {
   GOOGLE_MAPS_EMBED_URL,
@@ -8,6 +9,12 @@ import {
   WHATSAPP_NUMBER,
   WHATSAPP_URL,
 } from '../data/mdaContent';
+import { db, handleFirestoreError, OperationType } from '../firebase';
+
+function generateMessageId(): string {
+  const num = Math.floor(1000 + Math.random() * 9000);
+  return `MSG-${Date.now()}-${num}`;
+}
 
 export function ContactPage() {
   const [name, setName] = useState('');
@@ -21,28 +28,64 @@ export function ContactPage() {
     e.preventDefault();
     setError(null);
 
+    const cleanName = name.trim().slice(0, 120);
+    const cleanEmail = email.trim().slice(0, 254);
+    const cleanMessage = message.trim().slice(0, 2000);
+
     const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (name.trim().length < 2) {
+    if (cleanName.length < 2) {
       setError('Mohon masukkan nama lengkap Anda.');
       return;
     }
-    if (!emailPattern.test(email.trim())) {
+    if (!emailPattern.test(cleanEmail)) {
       setError('Mohon masukkan alamat email yang valid.');
       return;
     }
-    if (message.trim().length < 5) {
+    if (cleanMessage.length < 5) {
       setError('Mohon tuliskan pesan Anda minimal 5 karakter.');
       return;
     }
 
     setSubmitting(true);
     try {
+      const messageId = generateMessageId();
+      let saved = false;
+
+      try {
+        await setDoc(doc(db, 'contact_messages', messageId), {
+          messageId,
+          name: cleanName,
+          email: cleanEmail,
+          message: cleanMessage,
+          createdAt: serverTimestamp(),
+        });
+        saved = true;
+      } catch (firestoreErr) {
+        try {
+          handleFirestoreError(
+            firestoreErr,
+            OperationType.CREATE,
+            `contact_messages/${messageId}`
+          );
+        } catch {
+          // Structured error logged; fall back to /api/contact below.
+        }
+      }
+
+      if (saved) {
+        setSent(true);
+        return;
+      }
+
       const response = await fetch('/api/contact', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, message }),
+        body: JSON.stringify({ name: cleanName, email: cleanEmail, message: cleanMessage }),
       });
-      const data = (await response.json()) as { ok?: boolean; error?: string };
+      const contentType = response.headers.get('content-type') || '';
+      const data = contentType.includes('application/json')
+        ? ((await response.json()) as { ok?: boolean; error?: string })
+        : {};
       if (!response.ok || !data.ok) {
         setError(data.error || 'Gagal mengirim pesan. Silakan coba lagi.');
         return;

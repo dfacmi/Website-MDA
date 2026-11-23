@@ -1,4 +1,5 @@
 import { useRef, useState, type FormEvent } from 'react';
+import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { ArrowDown, CheckCircle2, Info, MessageCircle, Send } from 'lucide-react';
 import {
   CORE_PROGRAMS,
@@ -7,12 +8,20 @@ import {
   WHATSAPP_NUMBER,
   WHATSAPP_URL,
 } from '../data/mdaContent';
+import { db, handleFirestoreError, OperationType } from '../firebase';
 
 interface PpdbSubmission {
   registrationId: string;
   studentName: string;
   parentName: string;
   programInterest: string;
+}
+
+function generateRegistrationId(): string {
+  const year = new Date().getFullYear();
+  const num = Math.floor(1000 + Math.random() * 9000);
+  const suffix = Math.random().toString(36).slice(2, 6).toUpperCase();
+  return `MDA-${year}-${num}-${suffix}`;
 }
 
 export function PpdbPage() {
@@ -36,38 +45,88 @@ export function PpdbPage() {
     e.preventDefault();
     setError(null);
 
-    if (studentName.trim().length < 2) {
+    const cleanStudent = studentName.trim().slice(0, 120);
+    const cleanSchool = schoolOrigin.trim().slice(0, 150);
+    const cleanParent = parentName.trim().slice(0, 120);
+    const cleanWhatsapp = whatsapp.trim().slice(0, 30);
+    const cleanProgram = (programInterest.trim() || CORE_PROGRAMS[0].title).slice(0, 80);
+    const cleanNotes = notes.trim().slice(0, 1000);
+
+    if (cleanStudent.length < 2) {
       setError('Mohon isi nama lengkap calon siswa.');
       return;
     }
-    if (parentName.trim().length < 2) {
+    if (cleanParent.length < 2) {
       setError('Mohon isi nama orang tua atau wali.');
       return;
     }
-    if (whatsapp.replace(/\D/g, '').length < 9) {
+    if (cleanWhatsapp.replace(/\D/g, '').length < 9 || cleanWhatsapp.length < 8) {
       setError('Mohon masukkan nomor WhatsApp aktif yang valid.');
       return;
     }
 
     setSubmitting(true);
     try {
+      const registrationId = generateRegistrationId();
+      let saved = false;
+
+      // Primary: save directly to Firestore (works on Vercel, GitHub, AI Studio, and persists for admin)
+      try {
+        await setDoc(doc(db, 'ppdb_registrations', registrationId), {
+          registrationId,
+          studentName: cleanStudent,
+          schoolOrigin: cleanSchool,
+          parentName: cleanParent,
+          whatsapp: cleanWhatsapp,
+          programInterest: cleanProgram,
+          notes: cleanNotes,
+          status: 'baru',
+          createdAt: serverTimestamp(),
+        });
+        saved = true;
+      } catch (firestoreErr) {
+        try {
+          handleFirestoreError(
+            firestoreErr,
+            OperationType.CREATE,
+            `ppdb_registrations/${registrationId}`
+          );
+        } catch {
+          // Structured error logged; fall back to /api/ppdb below.
+        }
+      }
+
+      if (saved) {
+        setSubmission({
+          registrationId,
+          studentName: cleanStudent,
+          parentName: cleanParent,
+          programInterest: cleanProgram,
+        });
+        return;
+      }
+
+      // Fallback: submit to /api/ppdb serverless/Express endpoint
       const response = await fetch('/api/ppdb', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          studentName,
-          schoolOrigin,
-          parentName,
-          whatsapp,
-          programInterest,
-          notes,
+          studentName: cleanStudent,
+          schoolOrigin: cleanSchool,
+          parentName: cleanParent,
+          whatsapp: cleanWhatsapp,
+          programInterest: cleanProgram,
+          notes: cleanNotes,
         }),
       });
-      const data = (await response.json()) as {
-        ok?: boolean;
-        registrationId?: string;
-        error?: string;
-      };
+      const contentType = response.headers.get('content-type') || '';
+      const data = contentType.includes('application/json')
+        ? ((await response.json()) as {
+            ok?: boolean;
+            registrationId?: string;
+            error?: string;
+          })
+        : {};
 
       if (!response.ok || !data.ok || !data.registrationId) {
         setError(data.error || 'Terjadi kendala saat mengirim formulir. Silakan coba lagi.');
@@ -76,9 +135,9 @@ export function PpdbPage() {
 
       setSubmission({
         registrationId: data.registrationId,
-        studentName: studentName.trim(),
-        parentName: parentName.trim(),
-        programInterest,
+        studentName: cleanStudent,
+        parentName: cleanParent,
+        programInterest: cleanProgram,
       });
     } catch {
       setError('Koneksi gagal. Silakan coba kembali atau hubungi admin PPDB melalui WhatsApp.');

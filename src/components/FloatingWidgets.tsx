@@ -50,7 +50,7 @@ export function FloatingWidgets({ onNavigate }: FloatingWidgetsProps) {
     };
 
     const historyPayload = messages
-      .filter((m) => !m.isError)
+      .filter((m) => m.id !== 'welcome' && !m.isError)
       .map((m) => ({ role: m.role, text: m.text }));
 
     setMessages((prev) => [...prev, userMsg]);
@@ -66,7 +66,10 @@ export function FloatingWidgets({ onNavigate }: FloatingWidgetsProps) {
           history: historyPayload,
         }),
       });
-      const data = (await response.json()) as { reply?: string; error?: string };
+      const contentType = response.headers.get('content-type') || '';
+      const data = contentType.includes('application/json')
+        ? ((await response.json()) as { reply?: string; error?: string })
+        : {};
 
       if (!response.ok || !data.reply) {
         setMessages((prev) => [

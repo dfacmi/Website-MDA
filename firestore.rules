@@ -70,6 +70,110 @@ service cloud.firestore {
         && data.updatedAt == request.time;
     }
 
+    // Validation Blueprint for PpdbRegistration (create)
+    function isValidPpdbRegistration(data, registrationId) {
+      return data.keys().hasAll([
+          'registrationId',
+          'studentName',
+          'schoolOrigin',
+          'parentName',
+          'whatsapp',
+          'programInterest',
+          'notes',
+          'status',
+          'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'registrationId',
+          'studentName',
+          'schoolOrigin',
+          'parentName',
+          'whatsapp',
+          'programInterest',
+          'notes',
+          'status',
+          'createdAt'
+        ])
+        && data.registrationId is string
+        && data.registrationId.size() >= 4
+        && data.registrationId.size() <= 64
+        && data.registrationId == registrationId
+        && data.studentName is string
+        && data.studentName.size() >= 2
+        && data.studentName.size() <= 120
+        && data.schoolOrigin is string
+        && data.schoolOrigin.size() <= 150
+        && data.parentName is string
+        && data.parentName.size() >= 2
+        && data.parentName.size() <= 120
+        && data.whatsapp is string
+        && data.whatsapp.size() >= 8
+        && data.whatsapp.size() <= 30
+        && data.programInterest is string
+        && data.programInterest.size() >= 1
+        && data.programInterest.size() <= 80
+        && data.notes is string
+        && data.notes.size() <= 1000
+        && data.status is string
+        && data.status == 'baru'
+        && data.createdAt is timestamp
+        && data.createdAt == request.time;
+    }
+
+    // Validation Blueprint for PpdbRegistration (admin update)
+    function isValidPpdbRegistrationUpdate(data, registrationId) {
+      return data.keys().hasAll([
+          'registrationId',
+          'studentName',
+          'schoolOrigin',
+          'parentName',
+          'whatsapp',
+          'programInterest',
+          'notes',
+          'status',
+          'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'registrationId',
+          'studentName',
+          'schoolOrigin',
+          'parentName',
+          'whatsapp',
+          'programInterest',
+          'notes',
+          'status',
+          'createdAt'
+        ])
+        && data.registrationId is string
+        && data.registrationId == registrationId
+        && data.status is string
+        && data.status in ['baru', 'diproses', 'selesai']
+        && data.notes is string
+        && data.notes.size() <= 1000
+        && data.createdAt is timestamp;
+    }
+
+    // Validation Blueprint for ContactMessage
+    function isValidContactMessage(data, messageId) {
+      return data.keys().hasAll(['messageId', 'name', 'email', 'message', 'createdAt'])
+        && data.keys().hasOnly(['messageId', 'name', 'email', 'message', 'createdAt'])
+        && data.messageId is string
+        && data.messageId.size() >= 4
+        && data.messageId.size() <= 64
+        && data.messageId == messageId
+        && data.name is string
+        && data.name.size() >= 2
+        && data.name.size() <= 120
+        && data.email is string
+        && data.email.size() >= 5
+        && data.email.size() <= 254
+        && data.message is string
+        && data.message.size() >= 5
+        && data.message.size() <= 2000
+        && data.createdAt is timestamp
+        && data.createdAt == request.time;
+    }
+
     // Publicly viewable website photos managed exclusively by verified MDA administrators
     match /site_photos/{slotId} {
       allow get: if isValidId(slotId) && (resource == null || existing().isPublic == true);
@@ -90,6 +194,37 @@ service cloud.firestore {
       allow delete: if isVerifiedUser()
         && isValidId(slotId)
         && isAdmin();
+    }
+
+    // Public write-once PPDB online registrations; PII readable/manageable strictly by verified admins
+    match /ppdb_registrations/{registrationId} {
+      allow get: if isVerifiedUser() && isValidId(registrationId) && isAdmin();
+      allow list: if isBootstrappedAdmin() && resource.data.registrationId is string;
+
+      allow create: if isValidId(registrationId)
+        && isValidPpdbRegistration(incoming(), registrationId);
+
+      allow update: if isVerifiedUser()
+        && isValidId(registrationId)
+        && isValidPpdbRegistrationUpdate(incoming(), registrationId)
+        && incoming().registrationId == existing().registrationId
+        && incoming().createdAt == existing().createdAt
+        && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'notes'])
+        && isAdmin();
+
+      allow delete: if isVerifiedUser() && isValidId(registrationId) && isAdmin();
+    }
+
+    // Public write-once Contact inquiries; PII readable strictly by verified admins
+    match /contact_messages/{messageId} {
+      allow get: if isVerifiedUser() && isValidId(messageId) && isAdmin();
+      allow list: if isBootstrappedAdmin() && resource.data.messageId is string;
+
+      allow create: if isValidId(messageId)
+        && isValidContactMessage(incoming(), messageId);
+
+      allow update: if false;
+      allow delete: if isVerifiedUser() && isValidId(messageId) && isAdmin();
     }
 
     // Admin registry (closed to all client mutations to prevent self-promotion)
