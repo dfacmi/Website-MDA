@@ -1,0 +1,8 @@
+{
+  "name": "Muslim Digital Academy (MDA)",
+  "description": "Sekolah Digital Islami Berbasis Project — Mencetak Muslim Kreatif, Adaptif, dan Siap Menghadapi Era Digital.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

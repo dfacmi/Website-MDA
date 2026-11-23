@@ -1,0 +1,101 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global Safety Net: Deny all access by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Global Primitives
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isBootstrappedAdmin() {
+      return isVerifiedUser()
+        && request.auth.token.email is string
+        && request.auth.token.email.lower() == 'teguhade1926@gmail.com';
+    }
+
+    function isAdmin() {
+      return isBootstrappedAdmin() || (
+        isVerifiedUser() && exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function hasValidImagePrefix(val) {
+      return val.size() >= 32
+        && val.size() <= 750000
+        && (
+          val[0:23] == 'data:image/jpeg;base64,'
+          || val[0:22] == 'data:image/png;base64,'
+          || val[0:23] == 'data:image/webp;base64,'
+        );
+    }
+
+    // Validation Blueprint for SitePhoto
+    function isValidSitePhoto(data, slotId) {
+      return data.keys().hasAll(['slotId', 'dataUrl', 'isPublic', 'updatedBy', 'updatedAt'])
+        && data.keys().hasOnly(['slotId', 'dataUrl', 'isPublic', 'updatedBy', 'updatedAt'])
+        && data.slotId is string
+        && data.slotId.size() >= 1
+        && data.slotId.size() <= 64
+        && data.slotId == slotId
+        && data.dataUrl is string
+        && hasValidImagePrefix(data.dataUrl)
+        && data.isPublic is bool
+        && data.isPublic == true
+        && data.updatedBy is string
+        && data.updatedBy.size() >= 1
+        && data.updatedBy.size() <= 128
+        && data.updatedBy == request.auth.uid
+        && data.updatedAt is timestamp
+        && data.updatedAt == request.time;
+    }
+
+    // Publicly viewable website photos managed exclusively by verified MDA administrators
+    match /site_photos/{slotId} {
+      allow get: if isValidId(slotId) && (resource == null || existing().isPublic == true);
+      allow list: if resource.data.isPublic == true;
+
+      allow create: if isVerifiedUser()
+        && isValidId(slotId)
+        && isValidSitePhoto(incoming(), slotId)
+        && isAdmin();
+
+      allow update: if isVerifiedUser()
+        && isValidId(slotId)
+        && isValidSitePhoto(incoming(), slotId)
+        && incoming().slotId == existing().slotId
+        && incoming().diff(existing()).affectedKeys().hasOnly(['dataUrl', 'isPublic', 'updatedBy', 'updatedAt'])
+        && isAdmin();
+
+      allow delete: if isVerifiedUser()
+        && isValidId(slotId)
+        && isAdmin();
+    }
+
+    // Admin registry (closed to all client mutations to prevent self-promotion)
+    match /admins/{adminUid} {
+      allow get: if isVerifiedUser() && isValidId(adminUid) && request.auth.uid == adminUid;
+      allow list, create, update, delete: if false;
+    }
+  }
+}

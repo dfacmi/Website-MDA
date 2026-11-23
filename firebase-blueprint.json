@@ -1,0 +1,69 @@
+{
+  "entities": {
+    "SitePhoto": {
+      "title": "SitePhoto",
+      "description": "Custom photograph uploaded by a verified MDA administrator for a specific website slot (hero, about, teacher, or gallery).",
+      "type": "object",
+      "properties": {
+        "slotId": {
+          "type": "string",
+          "description": "Unique identifier for the photo slot matching the document ID.",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "dataUrl": {
+          "type": "string",
+          "description": "Compressed base64 JPEG/PNG/WebP data URI stored below the 750KB safety threshold.",
+          "minLength": 32,
+          "maxLength": 750000,
+          "pattern": "^data:image/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$"
+        },
+        "isPublic": {
+          "type": "boolean",
+          "description": "Explicit visibility flag enforced by Firestore list rules."
+        },
+        "updatedBy": {
+          "type": "string",
+          "description": "Firebase Auth UID of the administrator who last updated this photo.",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp recorded via request.time."
+        }
+      },
+      "required": ["slotId", "dataUrl", "isPublic", "updatedBy", "updatedAt"]
+    },
+    "AdminRecord": {
+      "title": "AdminRecord",
+      "description": "Trusted administrator directory record managed out-of-band.",
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string",
+          "format": "email",
+          "maxLength": 254
+        },
+        "role": {
+          "type": "string",
+          "enum": ["admin"],
+          "maxLength": 16
+        }
+      },
+      "required": ["email", "role"]
+    }
+  },
+  "firestore": {
+    "/site_photos/{slotId}": {
+      "schema": { "$ref": "#/entities/SitePhoto" },
+      "description": "Publicly readable website photos writable strictly by verified MDA administrators."
+    },
+    "/admins/{adminUid}": {
+      "schema": { "$ref": "#/entities/AdminRecord" },
+      "description": "Admin role registry; strictly read-only for the authenticated admin and closed to client writes."
+    }
+  }
+}
